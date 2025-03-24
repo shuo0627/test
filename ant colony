@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 MAP_SIZE = 15
 NUM_ANTS = 3
-ITERATIONS = 300
+ITERATIONS = 1000
 
 ALPHA = 1  
 BETA = 3   
@@ -16,7 +16,7 @@ Q = 100
 grid_edges = np.zeros((MAP_SIZE * 2, MAP_SIZE * 2))  
 pheromones = np.ones((MAP_SIZE, MAP_SIZE))  
 
-start_end_pairs = [((0, 0), (5, 8)), ((5, 0), (5, 5)), ((9, 0), (9, 9))]
+start_end_pairs = [((0, 0), (8, 4)), ((5, 0), (5, 5)), ((9, 0), (9, 9))]
 
 def a_star(start, end):
     global grid
@@ -120,10 +120,22 @@ def ant_walk(start, end, ant_index, occupied_points):
             return None  
 
         prev_move = (next_step[0] - path[-1][0], next_step[1] - path[-1][1])  
+
+        # 如果是「對角線移動」，就標記對應的 (x, y) 禁止通過
+        if abs(prev_move[0]) == 1 and abs(prev_move[1]) == 1:  # 代表移動是 45 度
+            block1 = (path[-1][0] + prev_move[0], path[-1][1])  # 水平點
+            block2 = (path[-1][0], path[-1][1] + prev_move[1])  # 垂直點
+
+            if 0 <= block1[0] < MAP_SIZE and 0 <= block1[1] < MAP_SIZE:
+                occupied_points.add(block1)
+            if 0 <= block2[0] < MAP_SIZE and 0 <= block2[1] < MAP_SIZE:
+                occupied_points.add(block2)
+
         occupied_points.add(next_step)
         path.append(next_step)
 
     return path
+
 
 def update_pheromones(paths):
     global pheromones
@@ -139,7 +151,7 @@ def ant_colony_optimization():
     initialize_pheromones()
     best_paths = []
     best_total_length = float('inf')
-
+    failures = []
     for iteration in range(ITERATIONS):
         initialize_grid()
         occupied_points = set()  
@@ -153,7 +165,7 @@ def ant_colony_optimization():
 
         valid_paths = [path for path in results if path is not None]
         if len(valid_paths) < NUM_ANTS:
-            print(f"Iteration {iteration + 1}: Not all ants reached the end, skipping")
+            failures.append(iteration + 1)
             continue  
 
         total_length = sum(len(path) for path in valid_paths)
@@ -167,10 +179,12 @@ def ant_colony_optimization():
         print("No valid paths found.")
         return
 
-    print("\nBest paths:")
+    '''print("\nBest paths:")
     for i, path in enumerate(best_paths):
-        print(f"Path {i+1}: {path}")
-
+        print(f"Path {i+1}: {path}")'''
+    
+    print(f'total ITERATIONS : {ITERATIONS} \nNumber of failures {len(failures)}')
+    print(f'Number of successes {ITERATIONS - (len(failures))}')
     plot_paths(best_paths)
 
 def plot_paths(paths):
@@ -187,5 +201,5 @@ def plot_paths(paths):
     plt.legend()
     plt.title("Best Paths")
     plt.show()
-
+  
 ant_colony_optimization()
