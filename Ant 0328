@@ -60,7 +60,7 @@ def initialize_grid():
 
 def initialize_pheromones():
     global pheromones
-    pheromones.fill(0.15)  
+    pheromones.fill(0.1)  
     for start, end in start_end_pairs:
         path = a_star(start, end)
         if path:
