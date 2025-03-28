@@ -1,3 +1,4 @@
+
 import concurrent.futures
 import random
 import heapq
@@ -6,7 +7,7 @@ import matplotlib.pyplot as plt
 
 MAP_SIZE = 300
 NUM_ANTS = 3
-ITERATIONS = 10000
+ITERATIONS = 30000
 
 ALPHA = 2
 BETA = 3
@@ -16,7 +17,7 @@ EVAPORATION = 0.1
 grid_edges = np.zeros((MAP_SIZE * 2, MAP_SIZE * 2))  
 pheromones = np.ones((MAP_SIZE, MAP_SIZE))  
 
-start_end_pairs = [((0, 0), (120, 80)), ((20, 0), (120, 35)), ((50, 0), (120, 100))]
+start_end_pairs = [((0, 0), (120, 80)), ((20, 0), (120, 35)), ((50, 0), (130, 100))]
 
 def a_star(start, end):
     global grid
@@ -60,7 +61,7 @@ def initialize_grid():
 
 def initialize_pheromones():
     global pheromones
-    pheromones.fill(0.1)  
+    pheromones.fill(0.1)
     for start, end in start_end_pairs:
         path = a_star(start, end)
         if path:
