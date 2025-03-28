@@ -9,14 +9,14 @@ NUM_ANTS = 3
 ITERATIONS = 10000
 
 ALPHA = 2
-BETA = 5
+BETA = 3
 EVAPORATION = 0.1
 
 
 grid_edges = np.zeros((MAP_SIZE * 2, MAP_SIZE * 2))  
 pheromones = np.ones((MAP_SIZE, MAP_SIZE))  
 
-start_end_pairs = [((0, 0), (120, 35)), ((90, 0), (90, 35)), ((200, 0), (120, 100))]
+start_end_pairs = [((0, 0), (120, 80)), ((20, 0), (120, 35)), ((50, 0), (120, 100))]
 
 def a_star(start, end):
     global grid
