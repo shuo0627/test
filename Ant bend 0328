@@ -1,1 +1,228 @@
+import concurrent.futures
+import random
+import heapq
+import numpy as np
+import matplotlib.pyplot as plt
 
+MAP_SIZE = 300
+NUM_ANTS = 3
+ITERATIONS = 10000
+
+ALPHA = 2
+BETA = 5
+EVAPORATION = 0.1
+
+
+grid_edges = np.zeros((MAP_SIZE * 2, MAP_SIZE * 2))  
+pheromones = np.ones((MAP_SIZE, MAP_SIZE))  
+
+start_end_pairs = [((0, 0), (120, 35)), ((90, 0), (90, 35)), ((200, 0), (120, 100))]
+
+def a_star(start, end):
+    global grid
+    if 'grid' not in globals():
+        grid = np.zeros((MAP_SIZE, MAP_SIZE)) 
+
+    open_list = []
+    heapq.heappush(open_list, (0, start)) 
+    came_from = {start: None}
+    g_score = {start: 0}
+
+    while open_list:
+
+        _, current = heapq.heappop(open_list)
+        if current == end:
+            break  
+
+        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1), (1, 1), (1, -1), (-1, 1), (-1, -1)]:
+            neighbor = (current[0] + dx, current[1] + dy)
+            if 0 <= neighbor[0] < MAP_SIZE and 0 <= neighbor[1] < MAP_SIZE and grid[neighbor[0], neighbor[1]] == 0:
+                tentative_g_score = g_score[current] + 1
+                if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
+                    g_score[neighbor] = tentative_g_score
+                    priority = tentative_g_score + abs(neighbor[0] - end[0]) + abs(neighbor[1] - end[1]) 
+                    heapq.heappush(open_list, (priority, neighbor))
+                    came_from[neighbor] = current
+
+    path = []
+    current = end
+    while current:
+        path.append(current)
+        current = came_from.get(current, None)
+    
+    path.reverse()
+    
+    return path if path[0] == start else None
+
+def initialize_grid():
+    global grid
+    grid = np.zeros((MAP_SIZE, MAP_SIZE))  
+
+def initialize_pheromones():
+    global pheromones
+    pheromones.fill(0.1)  
+    for start, end in start_end_pairs:
+        path = a_star(start, end)
+        if path:
+            for step in path:
+                pheromones[step] += 1.5
+                
+def select_next_step(ant, end, ant_index, occupied_points, prev_move):
+    x, y = ant
+
+    valid_directions = [(-1, 0), (1, 0), (0, -1), (0, 1), (1, 1), (-1, -1), (1, -1), (-1, 1)]
+
+    if prev_move:
+        prev_dx, prev_dy = prev_move
+        valid_directions = [(prev_dx, prev_dy)] 
+        
+        if (prev_dx, prev_dy) in [(-1, 0), (1, 0)]:  
+            valid_directions += [(prev_dx, 1), (prev_dx, -1)]
+        elif (prev_dx, prev_dy) in [(0, -1), (0, 1)]:  
+            valid_directions += [(1, prev_dy), (-1, prev_dy)]
+        elif (prev_dx, prev_dy) in [(1, 1), (-1, -1), (1, -1), (-1, 1)]:  
+            valid_directions += [(prev_dx, 0), (0, prev_dy)]
+
+    neighbors = [(x + dx, y + dy) for dx, dy in valid_directions]
+
+    valid_moves = []
+    for nx, ny in neighbors:
+        if 0 <= nx < MAP_SIZE and 0 <= ny < MAP_SIZE and grid[nx, ny] == 0 and (nx, ny) not in occupied_points:
+            valid_moves.append((nx, ny))
+
+    if not valid_moves:
+        return None  
+
+    scores = []
+    for move in valid_moves:
+        pheromone = pheromones[move]
+        heuristic = 1 / (abs(move[0] - end[0]) + abs(move[1] - end[1]) + 1)
+        score = (pheromone ** ALPHA) * (heuristic ** BETA)
+        scores.append((score, move))
+
+    scores.sort(reverse=True, key=lambda x: x[0])
+
+    total_weight = sum(m[0] for m in scores)
+    if total_weight == 0:
+        return random.choice(valid_moves)
+
+    return random.choices([m[1] for m in scores], weights=[m[0] for m in scores])[0]
+
+def ant_walk(start, end, ant_index, occupied_points):
+    path = [start]
+    occupied_points.add(start)  
+    bend_cost = 0
+    prev_move = None  
+
+    while path[-1] != end:
+        next_step = select_next_step(path[-1], end, ant_index, occupied_points, prev_move)
+
+        if next_step is None:
+            return None, float('inf')  
+
+        new_move = (next_step[0] - path[-1][0], next_step[1] - path[-1][1])  
+
+
+        bend_cost += 100 if prev_move is not None and prev_move != new_move else 0  
+
+        if abs(new_move[0]) == 1 and abs(new_move[1]) == 1:  
+            block1 = (path[-1][0] + new_move[0], path[-1][1])  
+            block2 = (path[-1][0], path[-1][1] + new_move[1])  
+
+            if 0 <= block1[0] < MAP_SIZE and 0 <= block1[1] < MAP_SIZE:
+                occupied_points.add(block1)
+            if 0 <= block2[0] < MAP_SIZE and 0 <= block2[1] < MAP_SIZE:
+                occupied_points.add(block2)
+
+        occupied_points.add(next_step)
+        path.append(next_step)
+        prev_move = new_move  
+
+    return path, bend_cost
+
+
+
+def update_pheromones(paths, update_times):
+    global pheromones
+    pheromones *= (1 - EVAPORATION)
+    update_times += 1
+
+    for path in paths:
+        if path:
+            length = len(path)
+            for step in path:
+                pheromones[step] += (0.5 * ((1 - EVAPORATION) ** update_times) * 0.9)
+    return update_times
+
+def ant_colony_optimization():
+    initialize_pheromones()
+    best_paths = []
+    best_total_length = float('inf')
+    failures = []
+    update_times = 0
+    chang_number = 0
+
+    for iteration in range(ITERATIONS):
+        initialize_grid()
+        occupied_points = set()  
+
+        
+        for start, _ in start_end_pairs:
+            occupied_points.add(start)
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=NUM_ANTS) as executor:
+            results, bend_costs = zip(*executor.map(ant_walk,
+                                        [p[0] for p in start_end_pairs], 
+                                        [p[1] for p in start_end_pairs], 
+                                        range(NUM_ANTS),
+                                        [occupied_points.copy()] * NUM_ANTS))  
+
+        valid_paths = [path for path in results if path is not None]
+
+        if len(valid_paths) < NUM_ANTS:
+            failures.append(ITERATIONS + 1)
+            continue  
+
+        total_cost = sum(len(path) for path in results) + sum(bend_costs)
+
+        
+        
+        if total_cost < best_total_length:
+            best_total_length = total_cost
+
+            best_paths = valid_paths
+
+            print(f"{chang_number + 1}\niteration {iteration}\ncost : {total_cost}\n")
+
+            plot_paths(best_paths)
+            chang_number += 1
+  
+            
+            update_times = update_pheromones(valid_paths, update_times)
+   
+    if not best_paths:
+        print("No valid paths found.")
+        return
+    print(f'chang_number : {chang_number}')
+    print(f'total iteration : {ITERATIONS}')
+    print(f'successes {ITERATIONS - (len(failures))}\nfailures {len(failures)}')
+    plot_paths(best_paths)
+
+
+def plot_paths(paths):
+    plt.figure(figsize=(5, 5))
+    plt.grid(True, linestyle="--", linewidth=0.5)
+    
+    colors = ['red', 'blue', 'green']
+    
+    for i, path in enumerate(paths):
+        if path:
+            x_coords, y_coords = zip(*path)
+            plt.plot(x_coords, y_coords, marker='o', color=colors[i], label=f'Path {i+1}')
+    
+    plt.legend()
+    plt.title("Best Paths")
+    plt.show()
+
+  
+ant_colony_optimization()  
