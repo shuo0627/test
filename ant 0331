@@ -4,20 +4,20 @@ import heapq
 import numpy as np
 import matplotlib.pyplot as plt
 
-MAP_SIZE = 200
+MAP_SIZE = 500
 NUM_ANTS = 1  
-ITERATIONS = 8000
+ITERATIONS = 10000
 
 ALPHA = 2
-BETA = 3 
+BETA = 3
 EVAPORATION = 0.1
-MIN_PHEROMONE = 0.01
-MAX_PHEROMONE = 6
+MIN_PHEROMONE = 0.005
+MAX_PHEROMONE = 5
 
 grid_edges = np.zeros((MAP_SIZE * 2, MAP_SIZE * 2))  
 pheromones = np.ones((MAP_SIZE, MAP_SIZE))
 
-start_end_pairs = [((0, 0), (110, 100)), ((40, 0), (90, 90)), ((70, 0), (130, 120))]
+start_end_pairs = [((20, 0), (310, 100)), ((40, 0), (290, 90)), ((70, 0), (330, 120))]
 
 def a_star(start, end):
     global grid
@@ -120,31 +120,35 @@ def update_pheromones(paths, update_times = 0):
         if path:
             length = len(path)
             for step in path:
-                pheromones[step] += 1.5
+                pheromones[step] += 1
     pheromones = np.clip(pheromones, MIN_PHEROMONE, MAX_PHEROMONE)
     return update_times
 
 
 def update_pheromones_1(paths):
     global pheromones
-    pheromones *= (1 - EVAPORATION) 
-
+    pheromones *= 0.98
     for path in paths:
         if path:
             length = len(path)
             for step in path:
-                pheromones[step] += 0.05
+                pheromones[step] += 0.01
     pheromones = np.clip(pheromones, MIN_PHEROMONE, MAX_PHEROMONE)
 
-def ant_walk(start, end, ant_index, occupied_points, prev_move):
+def ant_walk(start_end_pairs, occupied_points, prev_move):
     path = [start]
-    occupied_points.add(start)  
+    occupied_points.add(start)
     bend_cost = 0
     prev_move = None  
-
-    while path[-1] != end:
-        next_step = select_next_step(path[-1], end, ant_index, occupied_points, prev_move)
-
+    with concurrent.futures.ThreadPoolExecutor(max_workers= len(start_end_pairs)) as executor:
+        while path[-1] != end:
+            next_step = zip(*executor.map(select_next_step, 
+                                    [p[0] for p in start_end_pairs] * NUM_ANTS, 
+                                    [p[1] for p in start_end_pairs] * NUM_ANTS,
+                                    [i for i in range(NUM_ANTS)] * len(start_end_pairs),
+                                    [occupied_points.copy()] * NUM_ANTS * len(start_end_pairs),
+                                    [None] * NUM_ANTS * len(start_end_pairs)))
+    
         if next_step is None:
             return None, float('inf')  
 
@@ -182,13 +186,8 @@ def ant_colony_optimization():
         for start, _ in start_end_pairs:
             occupied_points.add(start)
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=NUM_ANTS * len(start_end_pairs)) as executor:
-            results, bend_costs = zip(*executor.map(ant_walk, 
-                                        [p[0] for p in start_end_pairs] * NUM_ANTS, 
-                                        [p[1] for p in start_end_pairs] * NUM_ANTS,
-                                        [i for i in range(NUM_ANTS)] * len(start_end_pairs),
-                                        [occupied_points.copy()] * NUM_ANTS * len(start_end_pairs),
-                                        [None] * NUM_ANTS * len(start_end_pairs)))  
+        results, bend_costs  = ant_walk(start_end_pairs, occupied_points)
+ 
         
 
         valid_paths = [path for path in results if path is not None]
